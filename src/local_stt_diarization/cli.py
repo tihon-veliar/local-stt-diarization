@@ -10,10 +10,17 @@ from .align import run_alignment
 from .audio import ensure_output_dir, prepare_audio, validate_input_audio
 from .config import FeatureFlags, RuntimeConfig, SpeakerConfig
 from .diarize import run_diarization
-from .exporters import write_exports
+from .exporters import write_exports, write_partial_checkpoint
 from .merge import build_document
-from .transcript_contract import StageStatus, TranscriptWarning
-from .transcribe import run_transcription
+from .transcript_contract import (
+    RunState,
+    Segment,
+    SourceMetadata,
+    StageStatus,
+    TranscriptWarning,
+    build_partial_transcript_document,
+)
+from .transcribe import TranscriptionSegmentData, run_transcription
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -116,154 +123,263 @@ def run_pipeline(config: RuntimeConfig) -> int:
 
     warnings: list[TranscriptWarning] = []
     stage_statuses: list[StageStatus] = []
+    checkpoint_segments: list[Segment] = []
+    checkpoint_source = SourceMetadata.from_path(config.input_path)
+    checkpoint_source.detected_language = config.language
+    checkpoint_target: Path | None = None
+    last_completed_stage: str | None = None
 
-    prepared_audio = prepare_audio(config.input_path, config.output_dir)
-
-    transcription = run_transcription(prepared_audio.normalized_path, config)
-    stage_statuses.append(
-        StageStatus(
-            stage="transcription",
-            status="completed",
-            details=f"Generated {len(transcription.segments)} transcript segments.",
+    def write_checkpoint(run_state: RunState, stage_name: str | None) -> None:
+        nonlocal checkpoint_target
+        if not checkpoint_segments:
+            return
+        document = build_partial_transcript_document(
+            run_state=run_state,
+            last_completed_stage=stage_name,
+            source=checkpoint_source,
+            segments=list(checkpoint_segments),
+            warnings=list(warnings),
+            stage_statuses=list(stage_statuses),
         )
-    )
+        checkpoint_target = write_partial_checkpoint(document, config.output_dir, config.input_path.stem)
 
-    aligned_segments = None
-    if config.features.enable_alignment:
-        try:
-            aligned = run_alignment(prepared_audio.normalized_path, transcription, config)
-            aligned_segments = aligned.segments if aligned is not None else None
-            if aligned_segments:
+    try:
+        _print_stage("prepare", "started", f"Preparing audio from {config.input_path.name}")
+        prepared_audio = prepare_audio(config.input_path, config.output_dir)
+        checkpoint_source.duration_seconds = prepared_audio.duration_seconds
+        last_completed_stage = "prepare"
+        _print_stage(
+            "prepare",
+            "completed",
+            f"Audio ready at {prepared_audio.normalized_path.name}",
+        )
+
+        _print_stage("transcription", "started", f"Running model {config.transcription_model}")
+
+        def on_transcription_segment(segment: TranscriptionSegmentData, count: int) -> None:
+            checkpoint_segments.append(
+                Segment(
+                    id=segment.id,
+                    start_seconds=segment.start_seconds,
+                    end_seconds=segment.end_seconds,
+                    text=segment.text,
+                    confidence=segment.confidence,
+                )
+            )
+            if count == 1 or count % 5 == 0:
+                _print_stage("transcription", "progress", f"Captured {count} transcript segments so far")
+                write_checkpoint("in_progress", last_completed_stage)
+
+        transcription = run_transcription(
+            prepared_audio.normalized_path,
+            config,
+            on_segment=on_transcription_segment,
+        )
+        checkpoint_source.detected_language = transcription.language
+        stage_statuses.append(
+            StageStatus(
+                stage="transcription",
+                status="completed",
+                details=f"Generated {len(transcription.segments)} transcript segments.",
+            )
+        )
+        last_completed_stage = "transcription"
+        write_checkpoint("in_progress", last_completed_stage)
+        _print_stage(
+            "transcription",
+            "completed",
+            f"Generated {len(transcription.segments)} transcript segments.",
+        )
+
+        aligned_segments = None
+        if config.features.enable_alignment:
+            _print_stage("alignment", "started", "Running best-effort alignment")
+            try:
+                aligned = run_alignment(prepared_audio.normalized_path, transcription, config)
+                aligned_segments = aligned.segments if aligned is not None else None
+                if aligned_segments:
+                    stage_statuses.append(
+                        StageStatus(
+                            stage="alignment",
+                            status="completed",
+                            details=f"Aligned {len(aligned_segments)} transcript segments.",
+                        )
+                    )
+                    last_completed_stage = "alignment"
+                    _print_stage(
+                        "alignment",
+                        "completed",
+                        f"Aligned {len(aligned_segments)} transcript segments.",
+                    )
+                else:
+                    stage_statuses.append(
+                        StageStatus(
+                            stage="alignment",
+                            status="skipped",
+                            details="Alignment disabled or unavailable for this run.",
+                        )
+                    )
+                    _print_stage(
+                        "alignment",
+                        "skipped",
+                        "Alignment unavailable; keeping transcription timestamps.",
+                    )
+                write_checkpoint("in_progress", last_completed_stage)
+            except Exception as exc:
+                warnings.append(
+                    TranscriptWarning(
+                        code="alignment_failed",
+                        stage="alignment",
+                        message=f"Alignment failed; transcript exported with transcription timestamps. {exc}",
+                    )
+                )
                 stage_statuses.append(
                     StageStatus(
                         stage="alignment",
-                        status="completed",
-                        details=f"Aligned {len(aligned_segments)} transcript segments.",
+                        status="degraded",
+                        details=str(exc),
                     )
                 )
-            else:
-                stage_statuses.append(
-                    StageStatus(
-                        stage="alignment",
-                        status="skipped",
-                        details="Alignment disabled or unavailable for this run.",
-                    )
-                )
-        except Exception as exc:
+                _print_warning("alignment", "alignment_failed", str(exc))
+                write_checkpoint("in_progress", last_completed_stage)
+        else:
             warnings.append(
                 TranscriptWarning(
-                    code="alignment_failed",
+                    code="alignment_unavailable",
                     stage="alignment",
-                    message=f"Alignment failed; transcript exported with transcription timestamps. {exc}",
+                    message="Alignment disabled by configuration.",
                 )
             )
             stage_statuses.append(
                 StageStatus(
                     stage="alignment",
-                    status="degraded",
-                    details=str(exc),
+                    status="skipped",
+                    details="Alignment disabled by configuration.",
                 )
             )
-    else:
-        warnings.append(
-            TranscriptWarning(
-                code="alignment_unavailable",
-                stage="alignment",
-                message="Alignment disabled by configuration.",
-            )
-        )
-        stage_statuses.append(
-            StageStatus(
-                stage="alignment",
-                status="skipped",
-                details="Alignment disabled by configuration.",
-            )
-        )
+            _print_stage("alignment", "skipped", "Alignment disabled by configuration.")
+            write_checkpoint("in_progress", last_completed_stage)
 
-    diarization_turns = None
-    if config.features.enable_diarization:
-        try:
-            diarization = run_diarization(prepared_audio.normalized_path, config)
-            diarization_turns = diarization.turns if diarization is not None else None
-            if diarization_turns:
-                stage_statuses.append(
-                    StageStatus(
-                        stage="diarization",
-                        status="completed",
-                        details=f"Generated {len(diarization_turns)} diarization turns.",
+        diarization_turns = None
+        if config.features.enable_diarization:
+            _print_stage("diarization", "started", "Running best-effort diarization")
+            try:
+                diarization = run_diarization(prepared_audio.normalized_path, config)
+                diarization_turns = diarization.turns if diarization is not None else None
+                if diarization_turns:
+                    stage_statuses.append(
+                        StageStatus(
+                            stage="diarization",
+                            status="completed",
+                            details=f"Generated {len(diarization_turns)} diarization turns.",
+                        )
                     )
-                )
-            else:
+                    last_completed_stage = "diarization"
+                    _print_stage(
+                        "diarization",
+                        "completed",
+                        f"Generated {len(diarization_turns)} diarization turns.",
+                    )
+                else:
+                    warnings.append(
+                        TranscriptWarning(
+                            code="diarization_unavailable",
+                            stage="diarization",
+                            message="Diarization returned no speaker turns; transcript exported without speaker labels.",
+                        )
+                    )
+                    stage_statuses.append(
+                        StageStatus(
+                            stage="diarization",
+                            status="degraded",
+                            details="No diarization turns were returned.",
+                        )
+                    )
+                    _print_warning(
+                        "diarization",
+                        "diarization_unavailable",
+                        "No speaker turns were returned; continuing without speaker labels.",
+                    )
+                write_checkpoint("in_progress", last_completed_stage)
+            except Exception as exc:
                 warnings.append(
                     TranscriptWarning(
-                        code="diarization_unavailable",
+                        code="diarization_failed",
                         stage="diarization",
-                        message="Diarization returned no speaker turns; transcript exported without speaker labels.",
+                        message=f"Diarization failed; transcript exported without speaker labels. {exc}",
                     )
                 )
                 stage_statuses.append(
                     StageStatus(
                         stage="diarization",
                         status="degraded",
-                        details="No diarization turns were returned.",
+                        details=str(exc),
                     )
                 )
-        except Exception as exc:
+                _print_warning("diarization", "diarization_failed", str(exc))
+                write_checkpoint("in_progress", last_completed_stage)
+        else:
             warnings.append(
                 TranscriptWarning(
-                    code="diarization_failed",
+                    code="diarization_disabled",
                     stage="diarization",
-                    message=f"Diarization failed; transcript exported without speaker labels. {exc}",
+                    message="Diarization disabled by configuration.",
                 )
             )
             stage_statuses.append(
                 StageStatus(
                     stage="diarization",
-                    status="degraded",
-                    details=str(exc),
+                    status="skipped",
+                    details="Diarization disabled by configuration.",
                 )
             )
-    else:
-        warnings.append(
-            TranscriptWarning(
-                code="diarization_disabled",
-                stage="diarization",
-                message="Diarization disabled by configuration.",
-            )
-        )
+            _print_stage("diarization", "skipped", "Diarization disabled by configuration.")
+            write_checkpoint("in_progress", last_completed_stage)
+
+        _print_stage("export", "started", "Writing final transcript artifacts")
         stage_statuses.append(
             StageStatus(
-                stage="diarization",
-                status="skipped",
-                details="Diarization disabled by configuration.",
+                stage="export",
+                status="completed",
+                details="Writing canonical JSON, TXT, and Markdown artifacts.",
             )
         )
 
-    stage_statuses.append(
-        StageStatus(
-            stage="export",
-            status="completed",
-            details="Writing canonical JSON, TXT, and Markdown artifacts.",
+        document = build_document(
+            source_path=config.input_path,
+            transcription=transcription,
+            aligned_segments=aligned_segments,
+            diarization_turns=diarization_turns,
+            warnings=warnings,
+            stage_statuses=stage_statuses,
+            duration_seconds=prepared_audio.duration_seconds,
         )
-    )
+        checkpoint_segments[:] = [segment for segment in document.segments]
+        last_completed_stage = "export"
+        write_checkpoint("completed", last_completed_stage)
 
-    document = build_document(
-        source_path=config.input_path,
-        transcription=transcription,
-        aligned_segments=aligned_segments,
-        diarization_turns=diarization_turns,
-        warnings=warnings,
-        stage_statuses=stage_statuses,
-        duration_seconds=prepared_audio.duration_seconds,
-    )
-    targets = write_exports(document, config.output_dir, config.input_path.stem)
+        targets = write_exports(document, config.output_dir, config.input_path.stem)
 
-    print(f"Transcript written to: {targets['json']}")
-    print(f"Plain text written to: {targets['txt']}")
-    print(f"Markdown written to: {targets['md']}")
-    for warning in warnings:
-        print(f"Warning [{warning.stage}/{warning.code}]: {warning.message}", file=sys.stderr)
-    return 0
+        _print_stage("export", "completed", "Final artifacts written successfully")
+        print(f"Transcript written to: {targets['json']}")
+        print(f"Plain text written to: {targets['txt']}")
+        print(f"Markdown written to: {targets['md']}")
+        if checkpoint_target is not None:
+            print(f"Checkpoint written to: {checkpoint_target}")
+        for warning in warnings:
+            _print_warning(warning.stage, warning.code, warning.message)
+        return 0
+    except Exception:
+        write_checkpoint("failed", last_completed_stage)
+        raise
+
+
+def _print_stage(stage: str, event: str, details: str) -> None:
+    print(f"[{stage}] {event}: {details}")
+
+
+def _print_warning(stage: str, code: str, message: str) -> None:
+    print(f"Warning [{stage}/{code}]: {message}", file=sys.stderr)
 
 
 if __name__ == "__main__":

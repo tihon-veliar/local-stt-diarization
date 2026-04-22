@@ -39,3 +39,4 @@ Thumbs.db
 # Optional environment files
 .env
 .env.*
+input

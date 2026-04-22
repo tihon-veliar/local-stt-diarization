@@ -4,6 +4,11 @@
 
 This CLI currently supports one local audio file per run and exports canonical JSON plus derived TXT and Markdown artifacts.
 
+For long runs, the agreed next-step behavior is:
+
+- the CLI should show visible stage progress while the process is active
+- the pipeline may write a checkpoint-style partial transcript artifact before final export completes
+
 ## Basic Command
 
 ```bash
@@ -72,6 +77,29 @@ Each successful run writes:
 
 The JSON artifact is the source of truth for downstream tooling. TXT and Markdown are derived from the same in-memory document.
 
+For long-running processing, the follow-up contract also allows an in-progress checkpoint artifact under a dedicated location such as:
+
+- `output/checkpoints/<stem>.json`
+
+That checkpoint artifact is operational state, not a replacement for the completed canonical JSON.
+
+## Runtime Visibility Expectations
+
+The CLI should not stay completely silent during long processing. The agreed progress model is:
+
+- announce stage start
+- announce stage completion
+- surface degraded optional stages honestly
+- show simple forward movement counters when the current pipeline can do so safely
+
+Expected visible stage names:
+
+- `prepare`
+- `transcription`
+- `alignment`
+- `diarization`
+- `export`
+
 ## Interpreting Warnings
 
 - `alignment_unavailable` or `alignment_failed` means timestamps came from the transcription layer rather than alignment.
@@ -79,6 +107,8 @@ The JSON artifact is the source of truth for downstream tooling. TXT and Markdow
 - `speaker_assignment_ambiguous` means the merge logic intentionally left some segment speakers unset.
 
 Warnings should be treated as signal about optional-stage quality, not as proof that the transcript itself failed.
+
+If a partial checkpoint exists during a run, do not treat it as proof that the run completed successfully. The final completed JSON remains the authoritative finished artifact.
 
 ## Recommended Operating Order
 

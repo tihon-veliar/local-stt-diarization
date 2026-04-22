@@ -5,11 +5,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .transcript_contract import TranscriptDocument
+from .transcript_contract import PartialTranscriptDocument, TranscriptDocument
 
 
 def render_json(document: TranscriptDocument) -> str:
     """Render the canonical machine-readable artifact."""
+
+    return json.dumps(document.to_dict(), ensure_ascii=False, indent=2)
+
+
+def render_partial_json(document: PartialTranscriptDocument) -> str:
+    """Render an in-progress checkpoint artifact."""
 
     return json.dumps(document.to_dict(), ensure_ascii=False, indent=2)
 
@@ -63,3 +69,17 @@ def write_exports(document: TranscriptDocument, output_dir: Path, stem: str) -> 
     targets["txt"].write_text(render_txt(document), encoding="utf-8")
     targets["md"].write_text(render_markdown(document), encoding="utf-8")
     return targets
+
+
+def write_partial_checkpoint(
+    document: PartialTranscriptDocument,
+    output_dir: Path,
+    stem: str,
+) -> Path:
+    """Write an in-progress checkpoint artifact under a dedicated location."""
+
+    checkpoint_dir = output_dir / "checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    target = checkpoint_dir / f"{stem}.json"
+    target.write_text(render_partial_json(document), encoding="utf-8")
+    return target

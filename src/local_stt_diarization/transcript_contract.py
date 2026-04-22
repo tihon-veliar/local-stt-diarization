@@ -5,11 +5,12 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from .config import StageName, WarningCode
 
 SCHEMA_VERSION = "1.0"
+RunState = Literal["in_progress", "failed", "interrupted", "completed"]
 
 
 @dataclass(slots=True)
@@ -102,6 +103,38 @@ class TranscriptDocument:
         return asdict(self)
 
 
+@dataclass(slots=True)
+class PartialTranscriptDocument:
+    """Operational checkpoint document for in-progress or failed runs."""
+
+    schema_version: str
+    artifact_kind: str
+    run_state: RunState
+    updated_at: str
+    last_completed_stage: str | None
+    source: SourceMetadata
+    full_text: str
+    segments: list[Segment]
+    warnings: list[TranscriptWarning] = field(default_factory=list)
+    stage_statuses: list[StageStatus] = field(default_factory=list)
+
+    def validate(self) -> None:
+        if self.schema_version != SCHEMA_VERSION:
+            raise ValueError(f"unsupported schema version: {self.schema_version}")
+        if self.artifact_kind != "checkpoint":
+            raise ValueError("partial transcript artifact_kind must be 'checkpoint'")
+        if not self.updated_at.strip():
+            raise ValueError("updated_at is required")
+        if not self.run_state.strip():
+            raise ValueError("run_state is required")
+        for segment in self.segments:
+            segment.validate()
+
+    def to_dict(self) -> dict[str, Any]:
+        self.validate()
+        return asdict(self)
+
+
 def build_transcript_document(
     *,
     source: SourceMetadata,
@@ -114,6 +147,33 @@ def build_transcript_document(
     document = TranscriptDocument(
         schema_version=SCHEMA_VERSION,
         created_at=datetime.now(UTC).isoformat(),
+        source=source,
+        full_text=_join_segment_text(segments),
+        segments=segments,
+        warnings=warnings or [],
+        stage_statuses=stage_statuses or [],
+    )
+    document.validate()
+    return document
+
+
+def build_partial_transcript_document(
+    *,
+    run_state: RunState,
+    last_completed_stage: str | None,
+    source: SourceMetadata,
+    segments: list[Segment],
+    warnings: list[TranscriptWarning] | None = None,
+    stage_statuses: list[StageStatus] | None = None,
+) -> PartialTranscriptDocument:
+    """Create an operational checkpoint artifact for an active or failed run."""
+
+    document = PartialTranscriptDocument(
+        schema_version=SCHEMA_VERSION,
+        artifact_kind="checkpoint",
+        run_state=run_state,
+        updated_at=datetime.now(UTC).isoformat(),
+        last_completed_stage=last_completed_stage,
         source=source,
         full_text=_join_segment_text(segments),
         segments=segments,

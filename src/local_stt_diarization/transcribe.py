@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .config import RuntimeConfig
 
@@ -34,7 +34,11 @@ class TranscriptionResult:
     raw_segments: list[dict[str, Any]]
 
 
-def run_transcription(audio_path: Path, config: RuntimeConfig) -> TranscriptionResult:
+def run_transcription(
+    audio_path: Path,
+    config: RuntimeConfig,
+    on_segment: Callable[[TranscriptionSegmentData, int], None] | None = None,
+) -> TranscriptionResult:
     """Run the mandatory transcription stage using faster-whisper."""
 
     if WhisperModel is None:
@@ -77,6 +81,8 @@ def run_transcription(audio_path: Path, config: RuntimeConfig) -> TranscriptionR
                 "text": canonical.text,
             }
         )
+        if on_segment is not None:
+            on_segment(canonical, len(segments))
 
     if not segments:
         raise RuntimeError("Transcription produced no segments.")

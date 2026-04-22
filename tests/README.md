@@ -18,6 +18,8 @@ Use non-sensitive local files that cover:
 - command used
 - environment notes such as CPU or CUDA
 - whether first-run downloads occurred
+- whether visible stage progress appeared during the run
+- whether a checkpoint artifact appeared under `output/checkpoints/`
 - stage warnings emitted
 - whether canonical JSON, TXT, and Markdown were all written
 - whether `speaker` fields were omitted conservatively when overlap was ambiguous

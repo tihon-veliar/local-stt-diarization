@@ -47,6 +47,8 @@ For longer files:
 
 This repository does not yet claim general benchmark guarantees for long recordings.
 
+If a future run shows progress messages and writes checkpoint artifacts under `output/checkpoints/`, that means the process is alive and preserving intermediate transcript state. It does not mean the final completed export has already succeeded.
+
 ## CUDA Or Torch Issues
 
 Common mitigation order:
@@ -77,3 +79,15 @@ First use may spend time downloading dependencies and weights. If a run appears 
 - retry with transcription-only mode if you need to narrow the failing stage
 
 Keep downloaded caches outside version control.
+
+## Silent Or Apparently Stuck Runs
+
+Long CPU or first-run model-download scenarios may appear quiet for a while.
+
+Operational interpretation should be:
+
+- console progress is a liveness signal for the active run
+- checkpoint artifacts are a recoverability signal for in-progress transcript state
+- final canonical exports are still the only authoritative completed outputs
+
+If the process shows neither visible forward movement nor checkpoint updates for an extended period, then treat the run as suspicious and inspect the local process state, resource usage, and dependency health.

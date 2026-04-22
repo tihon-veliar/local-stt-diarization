@@ -14,6 +14,8 @@ The canonical transcript JSON is the machine-readable source of truth for the pr
 - Alignment and diarization are optional enrichment stages.
 - Optional stage degradation must be representable without invalidating the final transcript artifact.
 - The contract should stay compact enough for downstream LLM tooling without fragile post-processing.
+- Runtime console progress is operational feedback for the current run, not part of the final transcript contract.
+- In-progress transcript persistence is allowed for long runs, but partial artifacts must stay distinct from completed canonical exports.
 
 ## Canonical JSON Shape
 
@@ -96,6 +98,63 @@ Current supported boundaries:
 - `speaker.max_speakers`
 
 These options are intentionally limited to single-file local CLI processing. Batch orchestration and service settings are out of scope for the MVP.
+
+## Runtime Progress Contract
+
+The CLI progress model for long-running local execution should be intentionally small and operational:
+
+- emit stage-start messages
+- emit stage-completion messages
+- surface degraded optional stages as warnings or degraded stage outcomes
+- surface simple forward-movement counters only when they are already available from the current pipeline
+
+The visible runtime stages should be:
+
+- `prepare`
+- `transcription`
+- `alignment`
+- `diarization`
+- `export`
+
+This progress channel is user-facing feedback for the active process. It is not the persistent source of truth for downstream consumers.
+
+## Partial Transcript Artifact Contract
+
+Long runs may persist an in-progress transcript artifact before final export completes.
+
+The agreed boundary for the follow-up implementation pass is:
+
+- keep final canonical JSON, TXT, and Markdown as the authoritative completed-run outputs
+- place in-progress artifacts under a dedicated checkpoint location such as `output/checkpoints/`
+- avoid writing partial artifacts next to final outputs under confusingly similar names
+- start partial persistence from the transcription layer first, with later stages enriching the completed run rather than redefining the partial artifact model
+
+Recommended example path:
+
+- `output/checkpoints/<stem>.json`
+
+## Partial Artifact Rules
+
+An in-progress artifact must be distinguishable from a completed canonical transcript.
+
+Minimum expectations:
+
+- explicit run-state markers such as `in_progress`, `failed`, `interrupted`, or `completed`
+- explicit indication of the last completed stage
+- accumulated transcript segments so far
+- updated timestamp for the current checkpoint state
+
+Partial artifacts are for operator confidence and recoverability. They must not be presented as completed final transcript exports to downstream consumers.
+
+## Write-Frequency Guidance
+
+Partial persistence should balance recoverability against excessive disk churn.
+
+Implementation guidance for the next task:
+
+- write on meaningful transcript growth rather than every internal event
+- allow writes on stage completion
+- avoid overly chatty checkpoint updates when no useful transcript progress has occurred
 
 ## Warning And Degradation Rules
 

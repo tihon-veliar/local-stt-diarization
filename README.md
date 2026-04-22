@@ -71,12 +71,16 @@ The command writes:
 - `output/<stem>.txt`
 - `output/<stem>.md`
 
+For long-running runs, the follow-up contract also allows a dedicated in-progress checkpoint artifact under `output/checkpoints/`. That checkpoint state is operational only and must remain distinct from the final completed export set.
+
 ## Behavior Summary
 
 - Transcription is the required success path.
 - Alignment may degrade without failing the run.
 - Diarization may degrade, be disabled, or be unavailable without failing the run.
 - Weak or ambiguous speaker overlap leaves `speaker` unset rather than overstating certainty.
+- Runtime console progress is user-facing liveness feedback for the active run.
+- Partial transcript checkpoints are allowed for long processing, but they are not final completed outputs.
 
 ## Documentation Map
 
