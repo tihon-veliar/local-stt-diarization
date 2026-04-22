@@ -49,9 +49,10 @@ def merge_segments(
 ) -> list[Segment]:
     """Use aligned timestamps when available, otherwise keep transcription segments."""
 
+    aligned_segment_list = aligned_segments or []
     merged: list[Segment] = []
     for index, segment in enumerate(transcription.segments):
-        aligned = aligned_segments[index] if index < len(aligned_segments) else {}
+        aligned = aligned_segment_list[index] if index < len(aligned_segment_list) else {}
         start_seconds = float(aligned.get("start", segment.start_seconds))
         end_seconds = float(aligned.get("end", segment.end_seconds))
         text = str(aligned.get("text", segment.text)).strip() or segment.text

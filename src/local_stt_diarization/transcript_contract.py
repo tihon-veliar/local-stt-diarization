@@ -112,6 +112,7 @@ class PartialTranscriptDocument:
     run_state: RunState
     updated_at: str
     last_completed_stage: str | None
+    active_stage: str | None
     source: SourceMetadata
     full_text: str
     segments: list[Segment]
@@ -161,6 +162,7 @@ def build_partial_transcript_document(
     *,
     run_state: RunState,
     last_completed_stage: str | None,
+    active_stage: str | None,
     source: SourceMetadata,
     segments: list[Segment],
     warnings: list[TranscriptWarning] | None = None,
@@ -174,6 +176,7 @@ def build_partial_transcript_document(
         run_state=run_state,
         updated_at=datetime.now(UTC).isoformat(),
         last_completed_stage=last_completed_stage,
+        active_stage=active_stage,
         source=source,
         full_text=_join_segment_text(segments),
         segments=segments,

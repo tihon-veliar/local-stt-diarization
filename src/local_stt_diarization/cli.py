@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -199,14 +200,16 @@ def run_pipeline(config: RuntimeConfig) -> int:
     checkpoint_source.detected_language = config.language
     checkpoint_target: Path | None = None
     last_completed_stage: str | None = None
+    active_stage: str | None = None
 
-    def write_checkpoint(run_state: RunState, stage_name: str | None) -> None:
+    def write_checkpoint(run_state: RunState) -> None:
         nonlocal checkpoint_target
         if not checkpoint_segments:
             return
         document = build_partial_transcript_document(
             run_state=run_state,
-            last_completed_stage=stage_name,
+            last_completed_stage=last_completed_stage,
+            active_stage=active_stage,
             source=checkpoint_source,
             segments=list(checkpoint_segments),
             warnings=list(warnings),
@@ -216,6 +219,7 @@ def run_pipeline(config: RuntimeConfig) -> int:
 
     try:
         _print_stage_plan(stage_plan, config)
+        active_stage = "prepare"
         _print_stage(stage_plan, "prepare", "started", f"Preparing audio from {config.input_path.name}")
         prepared_audio = prepare_audio(config.input_path, config.output_dir)
         checkpoint_source.duration_seconds = prepared_audio.duration_seconds
@@ -234,6 +238,7 @@ def run_pipeline(config: RuntimeConfig) -> int:
             f"Audio ready at {prepared_audio.normalized_path.name}",
         )
 
+        active_stage = "transcription"
         _print_stage(stage_plan, "transcription", "started", f"Running model {config.transcription_model}")
 
         def on_transcription_segment(segment: TranscriptionSegmentData, count: int) -> None:
@@ -253,7 +258,7 @@ def run_pipeline(config: RuntimeConfig) -> int:
                     "progress",
                     f"Captured {count} transcript segments so far",
                 )
-                write_checkpoint("in_progress", last_completed_stage)
+                write_checkpoint("in_progress")
 
         transcription = run_transcription(
             prepared_audio.normalized_path,
@@ -269,7 +274,7 @@ def run_pipeline(config: RuntimeConfig) -> int:
             )
         )
         last_completed_stage = "transcription"
-        write_checkpoint("in_progress", last_completed_stage)
+        write_checkpoint("in_progress")
         _print_stage(
             stage_plan,
             "transcription",
@@ -279,6 +284,7 @@ def run_pipeline(config: RuntimeConfig) -> int:
 
         aligned_segments = None
         if config.features.enable_alignment:
+            active_stage = "alignment"
             _print_stage(stage_plan, "alignment", "started", "Running best-effort alignment")
             try:
                 aligned = run_alignment(prepared_audio.normalized_path, transcription, config)
@@ -312,7 +318,7 @@ def run_pipeline(config: RuntimeConfig) -> int:
                         "skipped",
                         "Alignment unavailable; keeping transcription timestamps.",
                     )
-                write_checkpoint("in_progress", last_completed_stage)
+                write_checkpoint("in_progress")
             except Exception as exc:
                 warnings.append(
                     TranscriptWarning(
@@ -330,7 +336,7 @@ def run_pipeline(config: RuntimeConfig) -> int:
                 )
                 _print_stage(stage_plan, "alignment", "degraded", str(exc))
                 _print_warning("alignment", "alignment_failed", str(exc))
-                write_checkpoint("in_progress", last_completed_stage)
+                write_checkpoint("in_progress")
         else:
             warnings.append(
                 TranscriptWarning(
@@ -347,10 +353,11 @@ def run_pipeline(config: RuntimeConfig) -> int:
                 )
             )
             _print_stage(stage_plan, "alignment", "skipped", "Alignment disabled by configuration.")
-            write_checkpoint("in_progress", last_completed_stage)
+            write_checkpoint("in_progress")
 
         diarization_turns = None
         if config.features.enable_diarization:
+            active_stage = "diarization"
             _print_stage(stage_plan, "diarization", "started", "Running best-effort diarization")
             try:
                 diarization = run_diarization(prepared_audio.normalized_path, config)
@@ -396,7 +403,7 @@ def run_pipeline(config: RuntimeConfig) -> int:
                         "diarization_unavailable",
                         "No speaker turns were returned; continuing without speaker labels.",
                     )
-                write_checkpoint("in_progress", last_completed_stage)
+                write_checkpoint("in_progress")
             except Exception as exc:
                 warnings.append(
                     TranscriptWarning(
@@ -414,7 +421,7 @@ def run_pipeline(config: RuntimeConfig) -> int:
                 )
                 _print_stage(stage_plan, "diarization", "degraded", str(exc))
                 _print_warning("diarization", "diarization_failed", str(exc))
-                write_checkpoint("in_progress", last_completed_stage)
+                write_checkpoint("in_progress")
         else:
             warnings.append(
                 TranscriptWarning(
@@ -431,8 +438,9 @@ def run_pipeline(config: RuntimeConfig) -> int:
                 )
             )
             _print_stage(stage_plan, "diarization", "skipped", "Diarization disabled by configuration.")
-            write_checkpoint("in_progress", last_completed_stage)
+            write_checkpoint("in_progress")
 
+        active_stage = "export"
         _print_stage(stage_plan, "export", "started", "Writing final transcript artifacts")
         selected_formats = ", ".join(config.exports.selected_formats()).upper()
         stage_statuses.append(
@@ -454,7 +462,8 @@ def run_pipeline(config: RuntimeConfig) -> int:
         )
         checkpoint_segments[:] = [segment for segment in document.segments]
         last_completed_stage = "export"
-        write_checkpoint("completed", last_completed_stage)
+        active_stage = None
+        write_checkpoint("completed")
 
         targets = write_exports(
             document,
@@ -475,7 +484,16 @@ def run_pipeline(config: RuntimeConfig) -> int:
             _print_warning(warning.stage, warning.code, warning.message)
         return 0
     except Exception:
-        write_checkpoint("failed", last_completed_stage)
+        error_log_path = _write_error_log(
+            config=config,
+            last_completed_stage=last_completed_stage,
+            active_stage=active_stage,
+            warnings=warnings,
+            stage_statuses=stage_statuses,
+        )
+        write_checkpoint("failed")
+        if error_log_path is not None:
+            print(f"Error log written to: {error_log_path}", file=sys.stderr)
         raise
 
 
@@ -492,6 +510,47 @@ def _print_stage(stage_plan: StagePlan, stage: str, event: str, details: str) ->
 
 def _print_warning(stage: str, code: str, message: str) -> None:
     print(f"Warning [{stage}/{code}]: {message}", file=sys.stderr)
+
+
+def _write_error_log(
+    *,
+    config: RuntimeConfig,
+    last_completed_stage: str | None,
+    active_stage: str | None,
+    warnings: list[TranscriptWarning],
+    stage_statuses: list[StageStatus],
+) -> Path | None:
+    try:
+        config.output_dir.mkdir(parents=True, exist_ok=True)
+        target = config.output_dir / f"{config.input_path.stem}.error.log"
+        lines = [
+            "local-stt-diarization runtime error",
+            "",
+            f"input_path: {config.input_path}",
+            f"output_dir: {config.output_dir}",
+            f"last_completed_stage: {last_completed_stage}",
+            f"active_stage: {active_stage}",
+            "",
+            "stage_statuses:",
+        ]
+        if stage_statuses:
+            for status in stage_statuses:
+                lines.append(f"- {status.stage}: {status.status} ({status.details or 'no details'})")
+        else:
+            lines.append("- none")
+
+        lines.extend(["", "warnings:"])
+        if warnings:
+            for warning in warnings:
+                lines.append(f"- {warning.stage}/{warning.code}: {warning.message}")
+        else:
+            lines.append("- none")
+
+        lines.extend(["", "traceback:", traceback.format_exc().rstrip(), ""])
+        target.write_text("\n".join(lines), encoding="utf-8")
+        return target
+    except Exception:
+        return None
 
 
 if __name__ == "__main__":

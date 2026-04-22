@@ -141,6 +141,7 @@ Minimum expectations:
 
 - explicit run-state markers such as `in_progress`, `failed`, `interrupted`, or `completed`
 - explicit indication of the last completed stage
+- explicit indication of the currently active stage when a checkpoint is captured mid-stage
 - accumulated transcript segments so far
 - updated timestamp for the current checkpoint state
 
