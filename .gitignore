@@ -1,0 +1,41 @@
+# Python build and cache artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+.venv/
+venv/
+
+# Local runtime artifacts
+output/
+tmp/
+temp/
+logs/
+*.log
+
+# Model caches and downloaded weights
+.cache/
+cache/
+models/
+checkpoints/
+hf-cache/
+huggingface/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Optional environment files
+.env
+.env.*
