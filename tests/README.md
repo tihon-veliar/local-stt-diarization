@@ -2,7 +2,13 @@
 
 ## Current State
 
-This repository does not yet contain committed automated tests for the pipeline stages. The current validation baseline is documentation-driven plus local smoke evidence.
+This repository now contains small committed unit tests for guided-config mapping and export-selection behavior.
+
+The current validation baseline is:
+
+- unit-level coverage for guided-mode config translation and mandatory JSON export behavior
+- documentation-driven manual validation guidance for the full runtime pipeline
+- local smoke evidence for the transcript pipeline
 
 ## Recommended Fixture Shape
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .config import ExportOptions
 from .transcript_contract import PartialTranscriptDocument, TranscriptDocument
 
 
@@ -56,18 +57,26 @@ def render_markdown(document: TranscriptDocument) -> str:
     return "\n".join(lines)
 
 
-def write_exports(document: TranscriptDocument, output_dir: Path, stem: str) -> dict[str, Path]:
-    """Write JSON, TXT, and Markdown artifacts from the canonical document."""
+def write_exports(
+    document: TranscriptDocument,
+    output_dir: Path,
+    stem: str,
+    export_options: ExportOptions | None = None,
+) -> dict[str, Path]:
+    """Write canonical JSON plus the selected adjacent exports."""
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    targets = {
-        "json": output_dir / f"{stem}.json",
-        "txt": output_dir / f"{stem}.txt",
-        "md": output_dir / f"{stem}.md",
-    }
+    options = export_options or ExportOptions()
+    targets = {"json": output_dir / f"{stem}.json"}
+    if options.write_txt:
+        targets["txt"] = output_dir / f"{stem}.txt"
+    if options.write_md:
+        targets["md"] = output_dir / f"{stem}.md"
     targets["json"].write_text(render_json(document), encoding="utf-8")
-    targets["txt"].write_text(render_txt(document), encoding="utf-8")
-    targets["md"].write_text(render_markdown(document), encoding="utf-8")
+    if options.write_txt:
+        targets["txt"].write_text(render_txt(document), encoding="utf-8")
+    if options.write_md:
+        targets["md"].write_text(render_markdown(document), encoding="utf-8")
     return targets
 
 

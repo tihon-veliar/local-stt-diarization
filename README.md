@@ -28,6 +28,8 @@ Transcript completion is the primary success condition. Alignment and diarizatio
 - `faster-whisper`
 - `WhisperX`
 - `pyannote.audio`
+- `Rich`
+- `questionary`
 - Windows with NVIDIA CUDA support preferred for practical long-form use
 
 ## Repository Layout
@@ -54,8 +56,15 @@ Happy path example:
 local-stt-diarization "C:/recordings/session01.m4a" --output-dir output
 ```
 
+Guided-mode example:
+
+```bash
+local-stt-diarization --guided
+```
+
 Useful options:
 
+- `--guided` to launch the guided terminal flow
 - `--language en` or `--language ru` to provide a language hint
 - `--model large-v3` to choose the transcription model
 - `--device cuda` to target the GPU
@@ -64,6 +73,7 @@ Useful options:
 - `--disable-diarization` to skip pyannote when debugging the environment
 - `--speakers 2` to provide an exact speaker hint
 - `--min-speakers 2 --max-speakers 4` to constrain automatic speaker estimation
+- `--no-txt` or `--no-md` to skip adjacent derived exports while keeping JSON mandatory
 
 The command writes:
 
@@ -73,18 +83,21 @@ The command writes:
 
 For long-running runs, the follow-up contract also allows a dedicated in-progress checkpoint artifact under `output/checkpoints/`. That checkpoint state is operational only and must remain distinct from the final completed export set.
 
-## Approved Guided Mode Contract
+## Guided Mode
 
-The current shipped runtime remains the raw flag-driven CLI. The approved next operator surface for normal human-run usage is a guided terminal flow layered on top of the same runtime path.
+The project now supports two coordinated terminal surfaces:
 
-That guided flow is expected to:
+- a guided terminal flow for normal human-run usage
+- a raw flag-driven CLI for debugging, support, and automation
+
+The guided flow:
 
 - scan only top-level supported audio files under `input/`
 - default each run to `output/<input-stem>/`
 - offer presets for `Fast transcript`, `Full transcript + diarization`, `Safe CPU / troubleshooting`, and `Custom`
 - keep `JSON` mandatory while leaving `TXT` and `Markdown` enabled by default but user-selectable
-- show the full planned stage list with stable counters and explicit `skipped` entries for disabled optional stages
-- keep advanced low-level controls behind an explicit review branch instead of the first prompt layer
+- keep full low-level override prompts behind the `Custom` branch
+- end by invoking the same pipeline used by the raw CLI
 
 The raw CLI remains the support, automation, and troubleshooting fallback.
 

@@ -1,6 +1,6 @@
 """local_stt_diarization package."""
 
-from .config import FeatureFlags, RuntimeConfig, SpeakerConfig
+from .config import ExportOptions, FeatureFlags, RuntimeConfig, SpeakerConfig
 from .diarize import DiarizationResult, DiarizationTurn
 from .exporters import render_json, render_markdown, render_txt, write_exports
 from .transcript_contract import (
@@ -15,6 +15,7 @@ from .transcript_contract import (
 
 __all__ = [
     "__version__",
+    "ExportOptions",
     "FeatureFlags",
     "DiarizationResult",
     "DiarizationTurn",

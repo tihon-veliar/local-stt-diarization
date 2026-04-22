@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 
+ExportFormat = Literal["json", "txt", "md"]
 StageName = Literal["transcription", "alignment", "diarization", "export"]
 WarningCode = Literal[
     "alignment_unavailable",
@@ -62,6 +63,22 @@ class SpeakerConfig:
 
 
 @dataclass(slots=True)
+class ExportOptions:
+    """Export toggles layered on top of the mandatory canonical JSON artifact."""
+
+    write_txt: bool = True
+    write_md: bool = True
+
+    def selected_formats(self) -> tuple[ExportFormat, ...]:
+        formats: list[ExportFormat] = ["json"]
+        if self.write_txt:
+            formats.append("txt")
+        if self.write_md:
+            formats.append("md")
+        return tuple(formats)
+
+
+@dataclass(slots=True)
 class RuntimeConfig:
     """Canonical runtime inputs shared by later pipeline stages."""
 
@@ -73,6 +90,7 @@ class RuntimeConfig:
     device: str = "cuda"
     features: FeatureFlags = field(default_factory=FeatureFlags)
     speaker: SpeakerConfig = field(default_factory=SpeakerConfig)
+    exports: ExportOptions = field(default_factory=ExportOptions)
 
     def validate(self) -> None:
         if not self.input_path:

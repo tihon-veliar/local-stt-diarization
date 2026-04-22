@@ -8,10 +8,11 @@ from pathlib import Path
 
 from .align import run_alignment
 from .audio import ensure_output_dir, prepare_audio, validate_input_audio
-from .config import FeatureFlags, RuntimeConfig, SpeakerConfig
+from .config import ExportOptions, FeatureFlags, RuntimeConfig, SpeakerConfig
 from .diarize import run_diarization
 from .exporters import write_exports, write_partial_checkpoint
 from .merge import build_document
+from .terminal_ui import run_guided_wizard
 from .transcript_contract import (
     RunState,
     Segment,
@@ -28,13 +29,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         prog="local-stt-diarization",
-        description="Transcribe a single audio file into canonical JSON, TXT, and Markdown outputs.",
+        description="Transcribe a single audio file into canonical JSON plus optional TXT and Markdown outputs.",
     )
-    parser.add_argument("input_path", help="Path to a supported audio file (.wav, .mp3, .m4a).")
+    parser.add_argument(
+        "input_path",
+        nargs="?",
+        help="Path to a supported audio file (.wav, .mp3, .m4a).",
+    )
     parser.add_argument(
         "--output-dir",
         default="output",
         help="Directory for exported transcript artifacts. Default: ./output",
+    )
+    parser.add_argument(
+        "--guided",
+        action="store_true",
+        help="Launch guided terminal prompts for normal operator-driven runs.",
     )
     parser.add_argument(
         "--language",
@@ -84,6 +94,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional upper bound for automatic speaker estimation.",
     )
+    parser.add_argument(
+        "--no-txt",
+        action="store_true",
+        help="Skip the adjacent TXT export. Canonical JSON still writes.",
+    )
+    parser.add_argument(
+        "--no-md",
+        action="store_true",
+        help="Skip the adjacent Markdown export. Canonical JSON still writes.",
+    )
     return parser
 
 
@@ -94,28 +114,43 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        config = RuntimeConfig(
-            input_path=validate_input_audio(Path(args.input_path)),
-            output_dir=ensure_output_dir(Path(args.output_dir)),
-            language=args.language,
-            transcription_model=args.model,
-            compute_type=args.compute_type,
-            device=args.device,
-            features=FeatureFlags(
-                enable_alignment=not args.disable_alignment,
-                enable_diarization=not args.disable_diarization,
-            ),
-            speaker=SpeakerConfig(
-                expected_speakers=args.speakers,
-                min_speakers=args.min_speakers,
-                max_speakers=args.max_speakers,
-            ),
-        )
+        if args.guided:
+            config = run_guided_wizard(Path.cwd())
+        else:
+            if args.input_path is None:
+                parser.error("input_path is required unless --guided is used")
+            config = build_runtime_config_from_args(args)
         config.validate()
         return run_pipeline(config)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
+
+
+def build_runtime_config_from_args(args: argparse.Namespace) -> RuntimeConfig:
+    """Create the canonical runtime config from raw CLI arguments."""
+
+    return RuntimeConfig(
+        input_path=validate_input_audio(Path(args.input_path)),
+        output_dir=ensure_output_dir(Path(args.output_dir)),
+        language=args.language,
+        transcription_model=args.model,
+        compute_type=args.compute_type,
+        device=args.device,
+        features=FeatureFlags(
+            enable_alignment=not args.disable_alignment,
+            enable_diarization=not args.disable_diarization,
+        ),
+        speaker=SpeakerConfig(
+            expected_speakers=args.speakers,
+            min_speakers=args.min_speakers,
+            max_speakers=args.max_speakers,
+        ),
+        exports=ExportOptions(
+            write_txt=not args.no_txt,
+            write_md=not args.no_md,
+        ),
+    )
 
 
 def run_pipeline(config: RuntimeConfig) -> int:
@@ -337,11 +372,12 @@ def run_pipeline(config: RuntimeConfig) -> int:
             write_checkpoint("in_progress", last_completed_stage)
 
         _print_stage("export", "started", "Writing final transcript artifacts")
+        selected_formats = ", ".join(config.exports.selected_formats()).upper()
         stage_statuses.append(
             StageStatus(
                 stage="export",
                 status="completed",
-                details="Writing canonical JSON, TXT, and Markdown artifacts.",
+                details=f"Writing export artifacts: {selected_formats}.",
             )
         )
 
@@ -358,12 +394,19 @@ def run_pipeline(config: RuntimeConfig) -> int:
         last_completed_stage = "export"
         write_checkpoint("completed", last_completed_stage)
 
-        targets = write_exports(document, config.output_dir, config.input_path.stem)
+        targets = write_exports(
+            document,
+            config.output_dir,
+            config.input_path.stem,
+            export_options=config.exports,
+        )
 
         _print_stage("export", "completed", "Final artifacts written successfully")
         print(f"Transcript written to: {targets['json']}")
-        print(f"Plain text written to: {targets['txt']}")
-        print(f"Markdown written to: {targets['md']}")
+        if "txt" in targets:
+            print(f"Plain text written to: {targets['txt']}")
+        if "md" in targets:
+            print(f"Markdown written to: {targets['md']}")
         if checkpoint_target is not None:
             print(f"Checkpoint written to: {checkpoint_target}")
         for warning in warnings:

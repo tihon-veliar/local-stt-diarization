@@ -2,18 +2,21 @@
 
 ## Scope
 
-This CLI currently supports one local audio file per run and exports canonical JSON plus derived TXT and Markdown artifacts.
+This CLI currently supports one local audio file per run and exports canonical JSON plus optional derived TXT and Markdown artifacts.
 
 For long runs, the agreed next-step behavior is:
 
 - the CLI should show visible stage progress while the process is active
 - the pipeline may write a checkpoint-style partial transcript artifact before final export completes
 
-The current runtime surface is the raw CLI. The approved next operator-facing contract also defines a guided terminal mode for normal human-operated runs without changing the underlying pipeline behavior.
+The current runtime supports both:
 
-## Approved Guided Flow
+- a guided terminal mode for normal human-operated runs
+- a raw CLI fallback for debugging, support, and automation
 
-When guided mode is implemented, the normal operator sequence should be:
+## Guided Flow
+
+The normal operator sequence is:
 
 1. Choose one supported audio file from the top level of `input/`.
 2. Accept or adjust the default output target under `output/<input-stem>/`.
@@ -21,7 +24,7 @@ When guided mode is implemented, the normal operator sequence should be:
 4. Choose language as `auto`, `en`, or `ru`.
 5. Choose speaker behavior.
 6. Review export formats with `JSON` always enabled.
-7. Optionally open advanced settings for low-level overrides.
+7. Open the advanced branch only when using `Custom`.
 8. Review the run summary and start processing.
 
 Guided mode must stay a thin wrapper over the same runtime path used by the raw CLI.
@@ -53,6 +56,12 @@ Guided mode must stay a thin wrapper over the same runtime path used by the raw 
 local-stt-diarization "C:/recordings/session01.m4a" --output-dir output
 ```
 
+## Guided Command
+
+```bash
+local-stt-diarization --guided
+```
+
 ## Common Inputs
 
 - `.wav`
@@ -64,6 +73,7 @@ Compressed inputs are normalized before transcription. Normalized intermediates 
 ## Common Options
 
 - `--output-dir output`
+- `--guided`
 - `--language en`
 - `--model large-v3`
 - `--device cuda`
@@ -72,6 +82,8 @@ Compressed inputs are normalized before transcription. Normalized intermediates 
 - `--disable-diarization`
 - `--speakers 2`
 - `--min-speakers 2 --max-speakers 4`
+- `--no-txt`
+- `--no-md`
 
 ## Example Commands
 
@@ -105,13 +117,19 @@ Constrain automatic speaker estimation:
 local-stt-diarization "C:/recordings/meeting.wav" --output-dir output --min-speakers 2 --max-speakers 4
 ```
 
+Keep only the canonical JSON output:
+
+```bash
+local-stt-diarization "C:/recordings/session01.m4a" --output-dir output --no-txt --no-md
+```
+
 ## Output Files
 
 Each successful run writes:
 
 - `<stem>.json` as the canonical contract
-- `<stem>.txt` as a plain-text rendering
-- `<stem>.md` as a Markdown rendering
+- `<stem>.txt` as a plain-text rendering when TXT export is enabled
+- `<stem>.md` as a Markdown rendering when Markdown export is enabled
 
 The JSON artifact is the source of truth for downstream tooling. TXT and Markdown are derived from the same in-memory document.
 
