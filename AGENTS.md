@@ -32,3 +32,4 @@ When continuing work:
 - preserve the canonical JSON contract once it is defined
 - keep diarization optional
 - avoid introducing batch orchestration or service APIs in the MVP unless scope is explicitly changed
+- use `docs/transcript_contract.md` and the dataclasses under `src/local_stt_diarization/` as the shared source of truth for transcript shape and runtime boundaries

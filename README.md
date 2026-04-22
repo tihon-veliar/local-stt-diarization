@@ -42,4 +42,16 @@ Transcript completion is the primary success condition. Alignment and diarizatio
 
 ## Current Status
 
-Project boundary and packaging baseline are in place. Pipeline implementation is intentionally not part of this initial setup task.
+Project boundary and packaging baseline are in place. The transcript contract and runtime configuration baseline are also defined so later pipeline stages can target one shared model.
+
+## Canonical Contract
+
+The canonical machine-readable output is JSON with:
+
+- source metadata
+- full transcript text
+- ordered transcript segments
+- optional warnings for degraded optional stages
+- coarse stage status records for support and debugging
+
+TXT and Markdown are derived views of the same canonical transcript document. See `docs/transcript_contract.md` for the schema and exporter rules.
