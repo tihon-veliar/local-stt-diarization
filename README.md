@@ -62,6 +62,12 @@ Guided-mode example:
 local-stt-diarization --guided
 ```
 
+Windows launcher example:
+
+```bat
+scripts\run_local_stt.bat
+```
+
 Useful options:
 
 - `--guided` to launch the guided terminal flow
@@ -74,6 +80,8 @@ Useful options:
 - `--speakers 2` to provide an exact speaker hint
 - `--min-speakers 2 --max-speakers 4` to constrain automatic speaker estimation
 - `--no-txt` or `--no-md` to skip adjacent derived exports while keeping JSON mandatory
+- `scripts\run_local_stt.bat --guided` to activate `.venv` and start the guided flow
+- `scripts\run_local_stt.bat "C:\path\to\audio.wav" --output-dir .\output\manual` to run the raw CLI through the same launcher
 
 The command writes:
 
