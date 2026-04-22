@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from .transcript_contract import TranscriptDocument
 
@@ -47,3 +48,18 @@ def render_markdown(document: TranscriptDocument) -> str:
             lines.append(f"- `{warning.stage}` / `{warning.code}`: {warning.message}")
 
     return "\n".join(lines)
+
+
+def write_exports(document: TranscriptDocument, output_dir: Path, stem: str) -> dict[str, Path]:
+    """Write JSON, TXT, and Markdown artifacts from the canonical document."""
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    targets = {
+        "json": output_dir / f"{stem}.json",
+        "txt": output_dir / f"{stem}.txt",
+        "md": output_dir / f"{stem}.md",
+    }
+    targets["json"].write_text(render_json(document), encoding="utf-8")
+    targets["txt"].write_text(render_txt(document), encoding="utf-8")
+    targets["md"].write_text(render_markdown(document), encoding="utf-8")
+    return targets

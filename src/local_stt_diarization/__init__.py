@@ -1,6 +1,7 @@
 """local_stt_diarization package."""
 
 from .config import FeatureFlags, RuntimeConfig, SpeakerConfig
+from .exporters import render_json, render_markdown, render_txt, write_exports
 from .transcript_contract import (
     SCHEMA_VERSION,
     Segment,
@@ -23,6 +24,10 @@ __all__ = [
     "TranscriptDocument",
     "TranscriptWarning",
     "build_transcript_document",
+    "render_json",
+    "render_markdown",
+    "render_txt",
+    "write_exports",
 ]
 
 __version__ = "0.1.0"

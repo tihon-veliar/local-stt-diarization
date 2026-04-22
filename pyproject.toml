@@ -12,7 +12,10 @@ license = { text = "Proprietary" }
 authors = [
   { name = "Workspace Owner" }
 ]
-dependencies = []
+dependencies = [
+  "faster-whisper>=1.0.3",
+  "whisperx>=3.1.1"
+]
 
 [project.optional-dependencies]
 dev = [

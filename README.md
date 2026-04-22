@@ -55,3 +55,41 @@ The canonical machine-readable output is JSON with:
 - coarse stage status records for support and debugging
 
 TXT and Markdown are derived views of the same canonical transcript document. See `docs/transcript_contract.md` for the schema and exporter rules.
+
+## Installation
+
+Create a Python 3.10+ environment inside this repository and install the package:
+
+```bash
+pip install -e .
+```
+
+The CLI expects local access to:
+
+- `ffmpeg` for normalization of `.mp3` and `.m4a`
+- `faster-whisper` for mandatory transcription
+- `WhisperX` for optional alignment
+
+## CLI Usage
+
+Happy path example:
+
+```bash
+local-stt-diarization "C:/recordings/session01.m4a" --output-dir output
+```
+
+Useful options:
+
+- `--language en` or `--language ru` to provide a language hint
+- `--model large-v3` to choose the transcription model
+- `--device cuda` to target the GPU
+- `--compute-type float16` for GPU-friendly inference
+- `--disable-alignment` to skip WhisperX when debugging the environment
+
+The command writes:
+
+- `output/<stem>.json`
+- `output/<stem>.txt`
+- `output/<stem>.md`
+
+If alignment is unavailable or fails, the transcript still exports with warnings and transcription timestamps.
