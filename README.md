@@ -73,6 +73,21 @@ The command writes:
 
 For long-running runs, the follow-up contract also allows a dedicated in-progress checkpoint artifact under `output/checkpoints/`. That checkpoint state is operational only and must remain distinct from the final completed export set.
 
+## Approved Guided Mode Contract
+
+The current shipped runtime remains the raw flag-driven CLI. The approved next operator surface for normal human-run usage is a guided terminal flow layered on top of the same runtime path.
+
+That guided flow is expected to:
+
+- scan only top-level supported audio files under `input/`
+- default each run to `output/<input-stem>/`
+- offer presets for `Fast transcript`, `Full transcript + diarization`, `Safe CPU / troubleshooting`, and `Custom`
+- keep `JSON` mandatory while leaving `TXT` and `Markdown` enabled by default but user-selectable
+- show the full planned stage list with stable counters and explicit `skipped` entries for disabled optional stages
+- keep advanced low-level controls behind an explicit review branch instead of the first prompt layer
+
+The raw CLI remains the support, automation, and troubleshooting fallback.
+
 ## Behavior Summary
 
 - Transcription is the required success path.

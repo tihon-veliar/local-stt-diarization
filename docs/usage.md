@@ -9,6 +9,44 @@ For long runs, the agreed next-step behavior is:
 - the CLI should show visible stage progress while the process is active
 - the pipeline may write a checkpoint-style partial transcript artifact before final export completes
 
+The current runtime surface is the raw CLI. The approved next operator-facing contract also defines a guided terminal mode for normal human-operated runs without changing the underlying pipeline behavior.
+
+## Approved Guided Flow
+
+When guided mode is implemented, the normal operator sequence should be:
+
+1. Choose one supported audio file from the top level of `input/`.
+2. Accept or adjust the default output target under `output/<input-stem>/`.
+3. Choose a run preset.
+4. Choose language as `auto`, `en`, or `ru`.
+5. Choose speaker behavior.
+6. Review export formats with `JSON` always enabled.
+7. Optionally open advanced settings for low-level overrides.
+8. Review the run summary and start processing.
+
+Guided mode must stay a thin wrapper over the same runtime path used by the raw CLI.
+
+## Preset Contract
+
+- `Fast transcript` keeps alignment enabled and diarization disabled for a quicker transcript-first run.
+- `Full transcript + diarization` keeps both optional enrichment stages enabled.
+- `Safe CPU / troubleshooting` forces CPU-safe execution and disables optional enrichment stages to isolate environment issues.
+- `Custom` starts from the full transcript baseline and opens the advanced branch for low-level overrides.
+
+## Speaker Contract
+
+- `No diarization` disables diarization entirely.
+- `Auto detect` enables diarization without explicit speaker-count hints.
+- `Exact speaker count` enables diarization and sets one exact speaker count.
+- `Speaker range` enables diarization and sets minimum plus maximum speaker counts.
+
+## Export Contract
+
+- `JSON` remains mandatory and cannot be deselected.
+- `TXT` starts enabled and may be deselected.
+- `Markdown` starts enabled and may be deselected.
+- Export choices must not suppress the canonical JSON artifact.
+
 ## Basic Command
 
 ```bash
@@ -87,10 +125,13 @@ That checkpoint artifact is operational state, not a replacement for the complet
 
 The CLI should not stay completely silent during long processing. The agreed progress model is:
 
+- print the planned stage sequence before execution starts
+- show stable stage counters such as `1/5`
 - announce stage start
 - announce stage completion
 - surface degraded optional stages honestly
 - show simple forward movement counters when the current pipeline can do so safely
+- keep disabled optional stages visible as `skipped` entries rather than removing them from the total plan
 
 Expected visible stage names:
 

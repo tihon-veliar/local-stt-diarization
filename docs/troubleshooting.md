@@ -91,3 +91,10 @@ Operational interpretation should be:
 - final canonical exports are still the only authoritative completed outputs
 
 If the process shows neither visible forward movement nor checkpoint updates for an extended period, then treat the run as suspicious and inspect the local process state, resource usage, and dependency health.
+
+For the upcoming guided mode, keep these operator expectations aligned with the raw CLI contract:
+
+- guided mode should only browse top-level files in `input/`
+- the default per-run destination should be `output/<input-stem>/`
+- `JSON` should stay mandatory even if other export formats are toggled off
+- optional disabled stages should still appear in the visible stage plan as `skipped`
