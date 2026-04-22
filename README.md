@@ -12,7 +12,7 @@ This project intentionally lives under `sandbox/` in the parent workspace, but i
 
 ## MVP Direction
 
-The planned MVP is a synchronous single-file CLI pipeline:
+The MVP is a synchronous single-file CLI pipeline:
 
 1. validate and normalize an input audio file
 2. run local transcription
@@ -22,56 +22,31 @@ The planned MVP is a synchronous single-file CLI pipeline:
 
 Transcript completion is the primary success condition. Alignment and diarization are fail-soft enhancements.
 
-## Planned Stack
+## Stack
 
 - Python 3.10+
 - `faster-whisper`
 - `WhisperX`
 - `pyannote.audio`
-- Windows with NVIDIA CUDA support
+- Windows with NVIDIA CUDA support preferred for practical long-form use
 
-## Initial Layout
+## Repository Layout
 
 - `src/local_stt_diarization/` - application package
-- `docs/` - setup, usage, and troubleshooting documentation
-- `examples/` - example commands and non-sensitive fixtures
+- `docs/` - setup, usage, troubleshooting, and benchmark notes
+- `examples/` - reusable command examples and non-sensitive fixtures
 - `config/` - sample configuration files when they become necessary
 - `scripts/` - local helper scripts
-- `tests/` - automated tests
+- `tests/` - automated coverage and fixture guidance
 - `output/` - generated artifacts, ignored by Git
 
-## Current Status
+## Quick Start
 
-Project boundary and packaging baseline are in place. The transcript contract and runtime configuration baseline are also defined so later pipeline stages can target one shared model.
-
-## Canonical Contract
-
-The canonical machine-readable output is JSON with:
-
-- source metadata
-- full transcript text
-- ordered transcript segments
-- optional warnings for degraded optional stages
-- coarse stage status records for support and debugging
-
-TXT and Markdown are derived views of the same canonical transcript document. See `docs/transcript_contract.md` for the schema and exporter rules.
-
-## Installation
-
-Create a Python 3.10+ environment inside this repository and install the package:
-
-```bash
-pip install -e .
-```
-
-The CLI expects local access to:
-
-- `ffmpeg` for normalization of `.mp3` and `.m4a`
-- `faster-whisper` for mandatory transcription
-- `WhisperX` for optional alignment
-- `pyannote.audio` for optional diarization
-
-## CLI Usage
+1. Create and activate a Python 3.10+ environment.
+2. Install the package with `pip install -e .`.
+3. Ensure `ffmpeg` is available on `PATH`.
+4. Provide local model download access for `faster-whisper`, WhisperX, and optionally `pyannote.audio`.
+5. Run the CLI against a single recording.
 
 Happy path example:
 
@@ -96,6 +71,35 @@ The command writes:
 - `output/<stem>.txt`
 - `output/<stem>.md`
 
-If alignment is unavailable or fails, the transcript still exports with warnings and transcription timestamps.
+## Behavior Summary
 
-If diarization is unavailable, weak, or fails, the transcript still exports and speaker labels are omitted where confidence is not strong enough to justify them.
+- Transcription is the required success path.
+- Alignment may degrade without failing the run.
+- Diarization may degrade, be disabled, or be unavailable without failing the run.
+- Weak or ambiguous speaker overlap leaves `speaker` unset rather than overstating certainty.
+
+## Documentation Map
+
+- `docs/setup_windows_cuda.md` - Windows setup expectations and dependency notes
+- `docs/usage.md` - CLI workflow and sample commands
+- `docs/troubleshooting.md` - common local failure modes and recovery steps
+- `docs/transcript_contract.md` - canonical JSON and exporter contract
+- `docs/benchmark_notes.md` - observed validation notes and current measurement gaps
+- `examples/commands.md` - copy-paste command examples
+- `tests/README.md` - fixture expectations and current validation scope
+
+## Canonical Contract
+
+The canonical machine-readable output is JSON with:
+
+- source metadata
+- full transcript text
+- ordered transcript segments
+- optional warnings for degraded optional stages
+- coarse stage status records for support and debugging
+
+TXT and Markdown are derived views of the same canonical transcript document. See `docs/transcript_contract.md` for the schema and exporter rules.
+
+## Current Validation State
+
+The repository includes a smoke-output example under ignored `output/` artifacts, and the documentation records what has and has not been validated so far. Long-form acceptance and benchmark numbers still depend on locally available non-sensitive recordings.
