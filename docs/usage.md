@@ -159,6 +159,25 @@ Expected visible stage names:
 - `diarization`
 - `export`
 
+Example shape:
+
+```text
+Stage plan:
+  1/5 prepare [pending]
+  2/5 transcription [pending]
+  3/5 alignment [skipped] - disabled by configuration
+  4/5 diarization [skipped] - disabled by configuration
+  5/5 export [pending]
+[1/5 prepare] started: Preparing audio from sample.wav
+```
+
+Interpretation rules:
+
+- the counter reflects stage position in the full planned run, not global percent complete
+- `skipped` means the stage stayed visible in the plan but was intentionally disabled or unavailable
+- `degraded` means the optional stage had trouble but transcript export still continued
+- warnings remain the source of truth for why a stage degraded
+
 ## Interpreting Warnings
 
 - `alignment_unavailable` or `alignment_failed` means timestamps came from the transcription layer rather than alignment.

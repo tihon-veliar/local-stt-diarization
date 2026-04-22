@@ -89,6 +89,7 @@ Operational interpretation should be:
 - console progress is a liveness signal for the active run
 - checkpoint artifacts are a recoverability signal for in-progress transcript state
 - final canonical exports are still the only authoritative completed outputs
+- the stage-plan counter shows where the run is in the fixed plan, not a promise of exact remaining time
 
 If the process shows neither visible forward movement nor checkpoint updates for an extended period, then treat the run as suspicious and inspect the local process state, resource usage, and dependency health.
 
@@ -103,3 +104,9 @@ If guided mode does not start:
 
 - confirm `rich` and `questionary` are installed in the active environment
 - retry with the raw CLI fallback to isolate whether the issue is prompt-layer specific
+
+If guided mode starts but the run presentation feels confusing:
+
+- compare the printed stage plan with the chosen preset
+- remember that `Fast transcript` and `Safe CPU / troubleshooting` intentionally show optional stages as `skipped`
+- treat `degraded` optional stages as fail-soft signals and inspect the final warnings plus JSON output before assuming the whole run failed

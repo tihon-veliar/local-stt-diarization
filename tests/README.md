@@ -7,6 +7,7 @@ This repository now contains small committed unit tests for guided-config mappin
 The current validation baseline is:
 
 - unit-level coverage for guided-mode config translation and mandatory JSON export behavior
+- unit-level coverage for stable stage-plan rendering and raw CLI export toggles
 - documentation-driven manual validation guidance for the full runtime pipeline
 - local smoke evidence for the transcript pipeline
 

@@ -99,6 +99,14 @@ The guided flow:
 - keep full low-level override prompts behind the `Custom` branch
 - end by invoking the same pipeline used by the raw CLI
 
+During execution, both guided and raw CLI runs now print:
+
+- a stable stage plan before processing starts
+- stage counters such as `1/5 prepare`
+- honest `skipped` handling for disabled optional stages
+- degraded-stage messages without pretending the whole transcript failed
+- final artifact paths and checkpoint paths when they exist
+
 The raw CLI remains the support, automation, and troubleshooting fallback.
 
 ## Behavior Summary
