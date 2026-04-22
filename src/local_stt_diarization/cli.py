@@ -9,6 +9,7 @@ from pathlib import Path
 from .align import run_alignment
 from .audio import ensure_output_dir, prepare_audio, validate_input_audio
 from .config import FeatureFlags, RuntimeConfig, SpeakerConfig
+from .diarize import run_diarization
 from .exporters import write_exports
 from .merge import build_document
 from .transcript_contract import StageStatus, TranscriptWarning
@@ -54,10 +55,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip best-effort WhisperX alignment.",
     )
     parser.add_argument(
+        "--disable-diarization",
+        action="store_true",
+        help="Skip optional pyannote speaker diarization.",
+    )
+    parser.add_argument(
         "--speakers",
         type=int,
         default=None,
-        help="Reserved for later diarization support; accepted into runtime config now.",
+        help="Optional exact speaker-count hint for diarization.",
+    )
+    parser.add_argument(
+        "--min-speakers",
+        type=int,
+        default=None,
+        help="Optional lower bound for automatic speaker estimation.",
+    )
+    parser.add_argument(
+        "--max-speakers",
+        type=int,
+        default=None,
+        help="Optional upper bound for automatic speaker estimation.",
     )
     return parser
 
@@ -78,9 +96,13 @@ def main(argv: list[str] | None = None) -> int:
             device=args.device,
             features=FeatureFlags(
                 enable_alignment=not args.disable_alignment,
-                enable_diarization=False,
+                enable_diarization=not args.disable_diarization,
             ),
-            speaker=SpeakerConfig(expected_speakers=args.speakers),
+            speaker=SpeakerConfig(
+                expected_speakers=args.speakers,
+                min_speakers=args.min_speakers,
+                max_speakers=args.max_speakers,
+            ),
         )
         config.validate()
         return run_pipeline(config)
@@ -158,6 +180,65 @@ def run_pipeline(config: RuntimeConfig) -> int:
             )
         )
 
+    diarization_turns = None
+    if config.features.enable_diarization:
+        try:
+            diarization = run_diarization(prepared_audio.normalized_path, config)
+            diarization_turns = diarization.turns if diarization is not None else None
+            if diarization_turns:
+                stage_statuses.append(
+                    StageStatus(
+                        stage="diarization",
+                        status="completed",
+                        details=f"Generated {len(diarization_turns)} diarization turns.",
+                    )
+                )
+            else:
+                warnings.append(
+                    TranscriptWarning(
+                        code="diarization_unavailable",
+                        stage="diarization",
+                        message="Diarization returned no speaker turns; transcript exported without speaker labels.",
+                    )
+                )
+                stage_statuses.append(
+                    StageStatus(
+                        stage="diarization",
+                        status="degraded",
+                        details="No diarization turns were returned.",
+                    )
+                )
+        except Exception as exc:
+            warnings.append(
+                TranscriptWarning(
+                    code="diarization_failed",
+                    stage="diarization",
+                    message=f"Diarization failed; transcript exported without speaker labels. {exc}",
+                )
+            )
+            stage_statuses.append(
+                StageStatus(
+                    stage="diarization",
+                    status="degraded",
+                    details=str(exc),
+                )
+            )
+    else:
+        warnings.append(
+            TranscriptWarning(
+                code="diarization_disabled",
+                stage="diarization",
+                message="Diarization disabled by configuration.",
+            )
+        )
+        stage_statuses.append(
+            StageStatus(
+                stage="diarization",
+                status="skipped",
+                details="Diarization disabled by configuration.",
+            )
+        )
+
     stage_statuses.append(
         StageStatus(
             stage="export",
@@ -170,6 +251,7 @@ def run_pipeline(config: RuntimeConfig) -> int:
         source_path=config.input_path,
         transcription=transcription,
         aligned_segments=aligned_segments,
+        diarization_turns=diarization_turns,
         warnings=warnings,
         stage_statuses=stage_statuses,
         duration_seconds=prepared_audio.duration_seconds,

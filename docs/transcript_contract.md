@@ -104,6 +104,14 @@ These options are intentionally limited to single-file local CLI processing. Bat
 - If diarization is disabled, unavailable, weak, or fails, transcript export still succeeds and speaker labels may be partially absent.
 - Warnings should describe what degraded, not overstate certainty, and remain readable to both humans and downstream tooling.
 
+## Diarization Merge Behavior
+
+- Diarization is applied only after transcript segments already exist.
+- Speaker labels are assigned by time-overlap against each transcript segment.
+- A speaker label is written only when one speaker has clearly dominant overlap for that segment.
+- If overlap is weak or competing speakers are too close, the segment keeps `speaker: null` and a `speaker_assignment_ambiguous` warning may be added.
+- Transcript text and timestamps take priority over aggressive speaker attribution.
+
 ## Exporter Expectations
 
 - JSON exporter writes the canonical document unchanged.

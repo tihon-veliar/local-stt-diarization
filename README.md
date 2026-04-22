@@ -69,6 +69,7 @@ The CLI expects local access to:
 - `ffmpeg` for normalization of `.mp3` and `.m4a`
 - `faster-whisper` for mandatory transcription
 - `WhisperX` for optional alignment
+- `pyannote.audio` for optional diarization
 
 ## CLI Usage
 
@@ -85,6 +86,9 @@ Useful options:
 - `--device cuda` to target the GPU
 - `--compute-type float16` for GPU-friendly inference
 - `--disable-alignment` to skip WhisperX when debugging the environment
+- `--disable-diarization` to skip pyannote when debugging the environment
+- `--speakers 2` to provide an exact speaker hint
+- `--min-speakers 2 --max-speakers 4` to constrain automatic speaker estimation
 
 The command writes:
 
@@ -93,3 +97,5 @@ The command writes:
 - `output/<stem>.md`
 
 If alignment is unavailable or fails, the transcript still exports with warnings and transcription timestamps.
+
+If diarization is unavailable, weak, or fails, the transcript still exports and speaker labels are omitted where confidence is not strong enough to justify them.
