@@ -22,6 +22,9 @@ The MVP is a synchronous single-file CLI pipeline:
 
 Transcript completion is the primary success condition. Alignment and diarization are fail-soft enhancements.
 
+> **Experimental status:** the pipeline is still being validated on real
+> long-form recordings. Treat its output as a draft that may need review.
+
 ## Stack
 
 - Python 3.10+
