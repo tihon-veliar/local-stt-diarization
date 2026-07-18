@@ -27,6 +27,7 @@ The core product rule is:
 ## Delivery Alignment
 
 This project is being implemented from the parent delivery package `delivery/local_stt_diarization/`.
+That package is still a legacy flat package pending phased migration.
 
 When continuing work:
 - preserve the canonical JSON contract once it is defined
