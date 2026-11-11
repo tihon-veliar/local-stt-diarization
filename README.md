@@ -2,14 +2,6 @@
 
 Standalone local Windows CLI project for long-form conversation transcription with transcript-first reliability and optional speaker diarization enrichment.
 
-## Project Boundary
-
-This project intentionally lives under `sandbox/` in the parent workspace, but it is its own repository boundary and should be treated as an independent codebase.
-
-- Work on this project inside `sandbox/local-stt-diarization/`.
-- Do not fold its source files into the parent repository structure.
-- Keep runtime assets, model caches, outputs, and temporary files out of version control.
-
 ## MVP Direction
 
 The MVP is a synchronous single-file CLI pipeline:
